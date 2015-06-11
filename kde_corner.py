@@ -41,6 +41,11 @@ def every_other_tick(ticks):
     return labels
 
 def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None, pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003], colors = None, bw_method = None, labelfontsize = None):
+    """samples is an array of n_var by n_samples.
+       labels is a list of length n_var.
+       I recommend setting bw_method to 0.1, but the scipy default is default here."""
+
+
     n_var = len(samples)
 
     if figsize == None:
@@ -166,9 +171,6 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
             ax.yaxis.set_label_coords(label_coord, 0.5)
             ax.xaxis.set_label_coords(0.5, label_coord)
             
-
-            #ax.set_xlim(plt_limits[i]) # Just to make sure, do it after the axis changes; sometimes they affect the range. Is it numerical precision?
-            #ax.set_ylim(plt_limits[j])
 
 
     if pltname == None:
