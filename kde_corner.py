@@ -40,10 +40,10 @@ def every_other_tick(ticks):
     labels.append("")
     return labels
 
-def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None, pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003], colors = None, bw_method = None, labelfontsize = None):
+def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None, pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003], colors = None, bw_method = 0.1, labelfontsize = None):
     """samples is an array of n_var by n_samples.
        labels is a list of length n_var.
-       I recommend setting bw_method to 0.1, but the scipy default is default here."""
+       I recommend setting bw_method to 0.1."""
 
 
     n_var = len(samples)
