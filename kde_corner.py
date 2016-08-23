@@ -69,7 +69,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         grayscales = np.linspace(0.8, 0.4, len(contours))
         colors = [[item]*3 for item in grayscales]
 
-    colors = colors[::-1]
+    #colors = colors[::-1]
 
     fig = plt.figure(figsize = figsize)
 
