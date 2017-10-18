@@ -7,6 +7,6 @@ Also useful for making your own contour plots outside of the corner plots:
 import matplotlib.pyplot as plt
 from kde_corner import run_2D_KDE
 
-kernel_eval, levels, xvals, yvals, kernel_FN = run_2D_KDE(samples_of_x, samples_of_x, contours = [0.317311, 0.0455003], steps = 100)
+kernel_eval, levels, xvals, yvals, kernel_FN = run_2D_KDE(samples_of_x, samples_of_y, contours = [0.317311, 0.0455003], steps = 100)
 plt.contourf(xvals, yvals, kernel_eval, levels = levels)
 ```
