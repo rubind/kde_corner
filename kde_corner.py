@@ -9,12 +9,12 @@ def reflect(samps, othersamps = None, reflect_cut = 0.2):
 
     inds = np.where((samps < the_min*(1. - reflect_cut) + the_max*reflect_cut) & (samps > the_min))
     pad_samples = np.concatenate((samps, the_min - (samps[inds] - the_min)))
-    if othersamps != None:
+    if np.all(othersamps != None):
         pad_other = np.concatenate((othersamps, othersamps[inds]))
 
     inds = np.where((samps > the_min*reflect_cut + the_max*(1. - reflect_cut)) & (samps < the_max))
     pad_samples = np.concatenate((pad_samples, the_max + (the_max - samps[inds])))
-    if othersamps != None:
+    if np.all(othersamps != None):
         pad_other = np.concatenate((pad_other, othersamps[inds]))
         return pad_samples, pad_other
 
@@ -39,6 +39,34 @@ def every_other_tick(ticks):
             labels.append("")
     labels.append("")
     return labels
+
+def run_2D_KDE(samples_i, samples_j, bw_method = 0.1, contours = [0.317311, 0.0455003], steps = 100):
+
+    pad_samples_i, pad_samples_j = reflect_2D(samples_i, samples_j)
+
+    xvals, yvals = np.meshgrid(np.linspace(min(samples_i), max(samples_i), steps),
+                               np.linspace(min(samples_j), max(samples_j), steps))
+
+    try:
+        kernel = gaussian_kde(np.array([pad_samples_i, pad_samples_j]), bw_method = bw_method)
+    except:
+        print "Couldn't make KDE!"
+        return xvals*0, [0], xvals, yvals, lambda x: 0*x
+        
+
+    eval_points = np.array([xvals.reshape(steps**2), yvals.reshape(steps**2)])
+
+    kernel_eval = kernel(eval_points)
+    norm_term = kernel_eval.sum()
+    kernel_eval /= norm_term
+    kernel_sort = np.sort(kernel_eval)
+    kernel_eval = np.reshape(kernel_eval, (steps, steps))
+
+    kernel_cum = np.cumsum(kernel_sort)
+
+    levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]]
+
+    return kernel_eval, levels, xvals, yvals, lambda x: kernel(x)/norm_term
 
 def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = None, pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003], colors = None, bw_method = 0.1, labelfontsize = None):
     """samples is an array of variables and samples.
@@ -84,7 +112,12 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         #ax.hist(samples[i])
 
         pad_samples = reflect(samples[i])
-        kernel = gaussian_kde(pad_samples, bw_method = bw_method)
+        try:
+            kernel = gaussian_kde(pad_samples, bw_method = bw_method)
+        except:
+            print "Couldn't run KDE!"
+            kernel = lambda x: x*0
+            
         vals = np.linspace(min(samples[i]), max(samples[i]), 1000)
 
         kernel_eval = kernel(vals)
@@ -98,7 +131,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         for j in range(len(contours)):
             ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = colors[j])
         ax.plot(vals, kernel_eval, color = 'k')
-
+        ax.set_ylim(0, ax.get_ylim()[1])
         
 
         ax.set_yticks([])
@@ -120,34 +153,15 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
             print "Weird! Deleting."
 
         if i >= n_var - 1:
-            ax.set_xticklabels(every_other_tick(plt_ticks[i]))
+            #ax.set_xticklabels(every_other_tick(plt_ticks[i]))
             ax.yaxis.set_label_coords(label_coord, 0.5)
             ax.xaxis.set_label_coords(0.5, label_coord)
         
 
     for i in range(n_var - 1):
         for j in range(i+1, n_var):
-            pad_samples_i, pad_samples_j = reflect_2D(samples[i], samples[j])
+            kernel_eval, levels, xvals, yvals, kfn = run_2D_KDE(samples[i], samples[j], bw_method = bw_method, contours = contours)
 
-            kernel = gaussian_kde(np.array([pad_samples_i, pad_samples_j]), bw_method = bw_method)
-            
-
-            xvals, yvals = np.meshgrid(np.linspace(min(samples[i]), max(samples[i]), 100),
-                                       np.linspace(min(samples[j]), max(samples[j]), 100))
-
-            eval_points = np.array([xvals.reshape(10000), yvals.reshape(10000)])
-            
-            kernel_eval = kernel(eval_points)
-            kernel_eval /= kernel_eval.sum()
-            kernel_sort = np.sort(kernel_eval)
-            kernel_eval = np.reshape(kernel_eval, (100, 100))
-
-
-            
-            kernel_cum = np.cumsum(kernel_sort)
-            
-            levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]]
-            
             ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - j], plt_size, plt_size])
 
             ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = colors)
@@ -163,14 +177,14 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
                 ax.set_yticklabels([])
             else:
                 ax.set_ylabel(labels[j], fontsize=labelfontsize)
-                ax.set_yticklabels(every_other_tick(plt_ticks[j]), rotation = 45)
+                #ax.set_yticklabels(every_other_tick(plt_ticks[j]), rotation = 45)
 
             if j < (n_var - 1):
                 ax.set_xticklabels([])
             else:
                 ax.set_xlabel(labels[i], fontsize=labelfontsize)
-                ax.set_xticklabels(every_other_tick(plt_ticks[i]), rotation = 45)
-                print "xticks ", labels[i], ax.get_xticks(), every_other_tick(plt_ticks[i]), plt_limits[i]
+                #ax.set_xticklabels(every_other_tick(plt_ticks[i]), rotation = 45)
+                print "xticks ", labels[i], ax.get_xticks()#, every_other_tick(plt_ticks[i]), plt_limits[i]
 
             ax.yaxis.set_label_coords(label_coord, 0.5)
             ax.xaxis.set_label_coords(0.5, label_coord)
