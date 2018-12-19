@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
@@ -50,7 +52,7 @@ def run_2D_KDE(samples_i, samples_j, bw_method = 0.1, contours = [0.317311, 0.04
     try:
         kernel = gaussian_kde(np.array([pad_samples_i, pad_samples_j]), bw_method = bw_method)
     except:
-        print "Couldn't make KDE!"
+        print("Couldn't make KDE!")
         return xvals*0, [0], xvals, yvals, lambda x: 0*x
         
 
@@ -91,7 +93,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
 
     if labelfontsize == None:
         labelfontsize = 6 + int(figsize[0])
-    print "labelfontsize ", labelfontsize
+    print("labelfontsize ", labelfontsize)
 
     if colors == None:
         grayscales = np.linspace(0.8, 0.4, len(contours))
@@ -115,7 +117,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         try:
             kernel = gaussian_kde(pad_samples, bw_method = bw_method)
         except:
-            print "Couldn't run KDE!"
+            print("Couldn't run KDE!")
             kernel = lambda x: x*0
             
         vals = np.linspace(min(samples[i]), max(samples[i]), 1000)
@@ -126,7 +128,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         kernel_cum = np.cumsum(kernel_sort)
 
         levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
-        print "1D levels ", levels
+        print("1D levels ", levels)
 
         for j in range(len(contours)):
             ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = colors[j])
@@ -146,11 +148,11 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         plt_ticks.append(ax.get_xticks())
 
         if plt_ticks[-1][-1] > plt_limits[-1][-1] + 1.e-9:
-            print "Weird! Deleting."
+            print("Weird! Deleting.")
             plt_ticks[-1] = plt_ticks[-1][:-1]
         if plt_ticks[-1][0] < plt_limits[-1][0] - 1.e-9:
             plt_ticks[-1] = plt_ticks[-1][1:]
-            print "Weird! Deleting."
+            print("Weird! Deleting.")
 
         if i >= n_var - 1:
             #ax.set_xticklabels(every_other_tick(plt_ticks[i]))
@@ -184,7 +186,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
             else:
                 ax.set_xlabel(labels[i], fontsize=labelfontsize)
                 #ax.set_xticklabels(every_other_tick(plt_ticks[i]), rotation = 45)
-                print "xticks ", labels[i], ax.get_xticks()#, every_other_tick(plt_ticks[i]), plt_limits[i]
+                print("xticks ", labels[i], ax.get_xticks())#, every_other_tick(plt_ticks[i]), plt_limits[i]
 
             ax.yaxis.set_label_coords(label_coord, 0.5)
             ax.xaxis.set_label_coords(0.5, label_coord)
