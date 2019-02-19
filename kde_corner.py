@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 plt.rcParams["font.family"] = "serif"
 
+__all__ = ["kde_corner"]
+
 def reflect(samps, othersamps = None, reflect_cut = 0.2):
     the_min = min(samps)
     the_max = max(samps)
