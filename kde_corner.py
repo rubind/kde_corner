@@ -1,11 +1,26 @@
+"""kde_corner - Corner plots with proper KDE defined uncertainties.
+
+"""
+
 from __future__ import print_function
+
+# may be needed now. IDK
+from matplotlib import use
+use("PDF")
+
+# Todo, type hints force python >= 3.5
+from typing import Union
+from itertools import cycle
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from scipy.stats import gaussian_kde
 plt.rcParams["font.family"] = "serif"
 
-__all__ = ["kde_corner"]
+__all__ = ['kde_corner', 'run_2D_KDE']
+
+import seaborn as sns
 
 def reflect(samps, othersamps = None, reflect_cut = 0.2):
     the_min = min(samps)
@@ -72,17 +87,86 @@ def run_2D_KDE(samples_i, samples_j, bw_method = 0.1, contours = [0.317311, 0.04
 
     return kernel_eval, levels, xvals, yvals, lambda x: kernel(x)/norm_term
 
-def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = None, pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003], colors = None, bw_method = 0.1, labelfontsize = None):
-    """samples is an array of variables and samples.
-       labels is a list of length n_var.
-       I recommend setting bw_method to 0.1."""
-       
-    if len(orig_samples) > len(orig_samples[0]):
-        samples = np.transpose(orig_samples)
-    else:
-        samples = orig_samples
+def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
+               pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003],
+               colors = None, bw_method = 0.1, labelfontsize = None):
+    # type: (samples, labels, str, figsize, pad_side, pad_between, float, contours, colors, float, labelfontsize) -> Union[None, matplotlib.pyplot.figure]
+    """
+        labels is a list of length n_var.
+        I recommend setting bw_method to 0.1.
 
-    n_var = len(samples)
+        Parameters
+        ----------
+        samples: array_like of floats
+            An array of variables and samples.
+
+        labels: array_like of strings
+            This is the the labels that should be added to the  
+            Should be one label per variable to be plotted. 
+
+        pltname: str
+            If `pltname` is given, resulting figure is saved and `kde_corner` returns `None`.
+
+        figsize: float
+            Defaults to ???
+
+        pad_side: float
+            Defaults to ???
+
+        pad_between: float
+            Defaults to ???
+
+        label_coord: float
+
+        contours: array-like of floats
+            0.317311 is 1-sigma, and 0.0455003 is 2-sigma
+
+        colors: array-like
+
+        bw_method: float
+
+        lablefontsize:
+
+        Returns
+        -------
+        matplotlib.pyplot.figure or None:
+            Returns the figure containing the corner plot. Alternatively if `pltname` is used `None`
+
+        Notes
+        -----
+        It is best to use multiple contours or multiple data sets, but not both.
+
+        """
+
+    try:
+        samples[0][0][0]
+    except IndexError:
+        # there is only 1 data set here
+        N_datasets = 1
+        
+        if len(samples) > len(samples[0]):
+            samples = np.transpose(samples)
+        else:
+            samples = samples
+        
+        n_var = len(samples)
+
+        alpha = 1
+        
+        samples = [samples]   # This way we can loop over the set of samples.
+    else:
+        # There is a collection of data sets here
+        N_datasets = len(samples)       
+
+        for i, samp in enumerate(samples):
+            if len(samp) > len(samp[0]):
+                samples[i] = np.transpose(samp)
+            else:
+                samples[i] = samp #TODO: fix
+        
+        n_var = len(samples[0])
+
+        alpha = 0.5
 
     if figsize == None:
         figsize = [4 + 1.5*n_var]*2
@@ -98,8 +182,20 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
     print("labelfontsize ", labelfontsize)
 
     if colors == None:
+        # TODO: make this default back to greyscale for 1 dataset
+        colors = []
         grayscales = np.linspace(0.8, 0.4, len(contours))
-        colors = [[item]*3 for item in grayscales]
+        # colors = [[item]*3 for item in grayscales].
+        colors = [sns.color_palette("gray_r", n_colors=len(contours)),
+                  sns.color_palette("Blues", n_colors=len(contours)),
+                  sns.color_palette("Oranges", n_colors=len(contours))]
+                  # sns.color_palette("Reds", n_colors=len(contours)),
+                  # sns.color_palette("Purples", n_colors=len(contours))]
+        # colors = 
+        # for _ in samples:
+        #     colors = [[item]*3 for item in grayscales]
+        #     colors = cm.ScalarMappable(cmap='Blues').to_rgba(grayscales, alpha=0.5) 
+        # colors = [plt.get_cmap('Blues'), plt.get_cmap('Purples') ] # hard code for two samples
 
     #colors = colors[::-1]
 
@@ -115,29 +211,30 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - i], plt_size, plt_size])
         #ax.hist(samples[i])
 
-        pad_samples = reflect(samples[i])
-        try:
-            kernel = gaussian_kde(pad_samples, bw_method = bw_method)
-        except:
-            print("Couldn't run KDE!")
-            kernel = lambda x: x*0
+        for samp, color in zip(samples, colors):
+            pad_samples = reflect(samp[i])
+            try:
+                kernel = gaussian_kde(pad_samples, bw_method = bw_method)
+            except:
+                print("Couldn't run KDE!")
+                kernel = lambda x: x*0
+
+            vals = np.linspace(min(samp[i]), max(samp[i]), 1000)
+
+            kernel_eval = kernel(vals)
+            kernel_eval /= kernel_eval.sum()
+            kernel_sort = np.sort(kernel_eval)
+            kernel_cum = np.cumsum(kernel_sort)
+
+            levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
+            print("1D levels ", levels)
+
+            for j in range(len(contours)):
+                ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = color[j], alpha=alpha)
+            ax.plot(vals, kernel_eval, color = 'k')
+            ax.set_ylim(0, ax.get_ylim()[1])
             
-        vals = np.linspace(min(samples[i]), max(samples[i]), 1000)
-
-        kernel_eval = kernel(vals)
-        kernel_eval /= kernel_eval.sum()
-        kernel_sort = np.sort(kernel_eval)
-        kernel_cum = np.cumsum(kernel_sort)
-
-        levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
-        print("1D levels ", levels)
-
-        for j in range(len(contours)):
-            ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = colors[j])
-        ax.plot(vals, kernel_eval, color = 'k')
-        ax.set_ylim(0, ax.get_ylim()[1])
-        
-
+            # TODO: update so this does not get redone each time. Pull out of loop and do use slicing?
         ax.set_yticks([])
         if i < n_var - 1:
             ax.set_xticklabels([])
@@ -164,13 +261,16 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
 
     for i in range(n_var - 1):
         for j in range(i+1, n_var):
-            kernel_eval, levels, xvals, yvals, kfn = run_2D_KDE(samples[i], samples[j], bw_method = bw_method, contours = contours)
+            for samp, color in zip(samples, colors):
+                kernel_eval, levels, xvals, yvals, kfn = run_2D_KDE(samp[i], samp[j], bw_method = bw_method, contours = contours)
 
-            ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - j], plt_size, plt_size])
+                ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - j], plt_size, plt_size])
 
-            ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = colors)
-            ax.contour(xvals, yvals, kernel_eval, levels = levels, colors = 'k')
+                # TODO: only use alpha if multiple samples
+                ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = color, alpha=alpha)
+                ax.contour(xvals, yvals, kernel_eval, levels = levels, colors = 'k')
 
+                # TODO: update so this does not get redone each time. Pull out of loop and do use slicing?
             ax.set_xlim(plt_limits[i])
             ax.set_ylim(plt_limits[j])
 
@@ -192,7 +292,7 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
 
             ax.yaxis.set_label_coords(label_coord, 0.5)
             ax.xaxis.set_label_coords(0.5, label_coord)
-            
+                
 
 
     if pltname == None:
@@ -201,3 +301,15 @@ def kde_corner(orig_samples, labels, pltname = None, figsize = None, pad_side = 
         plt.savefig(pltname, bbox_inches = 'tight')
         plt.close()
 
+
+def get_color():
+    """A generator to cycle through a fix set of color palettes.
+
+    This allows kde_corner to work with arbitrary number of datasets,
+    though if you get too long it will not look good since colors will
+    start to repeat.
+    """
+    colors = [sns.color_palette("Blues", n_colors=len(contours)), 
+              sns.color_palette("Reds", n_colors=len(contours))]
+
+    yield cycle(colors)
