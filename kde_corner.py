@@ -89,55 +89,59 @@ def run_2D_KDE(samples_i, samples_j, bw_method = 0.1, contours = [0.317311, 0.04
 
 def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003],
-               colors = None, bw_method = 0.1, labelfontsize = None):
-    # type: (samples, labels, str, figsize, pad_side, pad_between, float, contours, colors, float, labelfontsize) -> Union[None, matplotlib.pyplot.figure]
+               colors = None, bw_method = 0.1, labelfontsize = None, ax_limits=[], truths=None,
+               titles=None):
+    # type: (samples, labels, str, figsize, pad_side, pad_between, float, contours,
+    #        colors, float, labelfontsize) -> Union[None, matplotlib.pyplot.figure]
     """
-        labels is a list of length n_var.
-        I recommend setting bw_method to 0.1.
+    labels is a list of length n_var.
+    I recommend setting bw_method to 0.1.
 
-        Parameters
-        ----------
-        samples: array_like of floats
-            An array of variables and samples.
+    Parameters
+    ----------
+    samples: array_like of floats
+        An array of variables and samples.
 
-        labels: array_like of strings
-            This is the the labels that should be added to the  
-            Should be one label per variable to be plotted. 
+    labels: array_like of strings
+        This is the the labels that should be added to the  
+        Should be one label per variable to be plotted. 
 
-        pltname: str
-            If `pltname` is given, resulting figure is saved and `kde_corner` returns `None`.
+    pltname: str
+        If `pltname` is given, resulting figure is saved and `kde_corner` returns `None`.
 
-        figsize: float
-            Defaults to ???
+    figsize: float
+        Defaults to ???
 
-        pad_side: float
-            Defaults to ???
+    pad_side: float
+        Defaults to ???
 
-        pad_between: float
-            Defaults to ???
+    pad_between: float
+        Defaults to ???
 
-        label_coord: float
+    label_coord: float
 
-        contours: array-like of floats
-            0.317311 is 1-sigma, and 0.0455003 is 2-sigma
+    contours: array-like of floats
+        0.317311 is 1-sigma, and 0.0455003 is 2-sigma
 
-        colors: array-like
+    colors: array-like
 
-        bw_method: float
+    bw_method: float
 
-        lablefontsize:
+    lablefontsize:
 
-        Returns
-        -------
-        matplotlib.pyplot.figure or None:
-            Returns the figure containing the corner plot. Alternatively if `pltname` is used `None`
+    titles:
+        15.8655, 50, and 84.1345 percentiles, not gaurenteed to match the KDE CR.
 
-        Notes
-        -----
-        It is best to use multiple contours or multiple data sets, but not both.
+    Returns
+    -------
+    matplotlib.pyplot.figure or None:
+        Returns the figure containing the corner plot. Alternatively if `pltname` is used `None`
 
-        """
+    Notes
+    -----
+    It is best to use multiple contours or multiple data sets, but not both.
 
+    """
     try:
         samples[0][0][0]
     except IndexError:
@@ -147,7 +151,7 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         if len(samples) > len(samples[0]):
             samples = np.transpose(samples)
         else:
-            samples = samples
+            samples = samples    #todo(this seems unnecessary)
         
         n_var = len(samples)
 
@@ -166,7 +170,8 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         
         n_var = len(samples[0])
 
-        alpha = 0.5
+        # alpha = 0.5
+        alpha = 0.4
 
     if figsize == None:
         figsize = [4 + 1.5*n_var]*2
@@ -194,9 +199,12 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         # colors = 
         # for _ in samples:
         #     colors = [[item]*3 for item in grayscales]
-        #     colors = cm.ScalarMappable(cmap='Blues').to_rgba(grayscales, alpha=0.5) 
+        #     colors = cm.ScalarMappable(cmap='Blues').to_rgba(grayscales, alpha=0.5) [
         # colors = [plt.get_cmap('Blues'), plt.get_cmap('Purples') ] # hard code for two samples
-
+    truth_color = "#4682b4"
+    title_fmt = '.3g'    # have 3 significant digits, left align with "0" padding
+    uncert_fmt = '.2g'
+    fmt = lambda x: f"{{0:{x}}}".format
     #colors = colors[::-1]
 
     fig = plt.figure(figsize = figsize)
@@ -222,9 +230,10 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
             vals = np.linspace(min(samp[i]), max(samp[i]), 1000)
 
             kernel_eval = kernel(vals)
-            kernel_eval /= kernel_eval.sum()
+            kernel_eval /= kernel_eval.max()
             kernel_sort = np.sort(kernel_eval)
             kernel_cum = np.cumsum(kernel_sort)
+            mean = vals[np.where(kernel_eval==1)[0][0]]
 
             levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
             print("1D levels ", levels)
@@ -233,6 +242,18 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                 ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = color[j], alpha=alpha)
             ax.plot(vals, kernel_eval, color = 'k')
             ax.set_ylim(0, ax.get_ylim()[1])
+
+            q_16, q_50, q_84 = np.percentile(samp[i], (15.8655, 50, 84.1345))
+            q_m, q_p = q_50-q_16, q_84-q_50
+            title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
+            title = title.format(fmt(title_fmt)(q_50), fmt(uncert_fmt)(q_m), fmt(uncert_fmt)(q_p))
+            current_title = ax.get_title()
+            if current_title == '':
+                # ax.set_title(f'{mean:{fmt}}, {np.percentile(samp[i], (15.8655, 50, 84.1345))}')
+                ax.set_title(title)
+            else:
+                # ax.set_title(f'{mean:{fmt}}, {np.percentile(samp[i], (15.8655, 50, 84.1345))}\n' + current_title)
+                ax.set_title(title + '\n' + current_title)      # todo(This is a bad default behavior)
             
             # TODO: update so this does not get redone each time. Pull out of loop and do use slicing?
         ax.set_yticks([])
@@ -243,6 +264,9 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
             plt.xticks(rotation = 45)
             plt.yticks(rotation = 45)
 
+        #TODO(This is the default operation, but overwriting plt_limits will change the plot limits. I think.)
+        if not ax_limits == []:
+            ax.set_xlim(ax_limits[i])
         plt_limits.append(ax.get_xlim())
         plt_ticks.append(ax.get_xticks())
 
@@ -257,6 +281,9 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
             #ax.set_xticklabels(every_other_tick(plt_ticks[i]))
             ax.yaxis.set_label_coords(label_coord, 0.5)
             ax.xaxis.set_label_coords(0.5, label_coord)
+
+        if truths is not None and truths[i] is not None:
+            ax.axvline(truths[i], color=truth_color)
         
 
     for i in range(n_var - 1):
@@ -270,11 +297,20 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                 ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = color, alpha=alpha)
                 ax.contour(xvals, yvals, kernel_eval, levels = levels, colors = 'k')
 
+            if truths is not None:
+                if truths[j] is not None and truths[i] is not None:
+                    ax.plot(truths[i], truths[j], "s", color=truth_color)
+                if truths[i] is not None:
+                    ax.axvline(truths[i], color=truth_color)
+                if truths[j] is not None:
+                    ax.axhline(truths[j], color=truth_color)
+
                 # TODO: update so this does not get redone each time. Pull out of loop and do use slicing?
             ax.set_xlim(plt_limits[i])
             ax.set_ylim(plt_limits[j])
 
-            ax.set_xticks(plt_ticks[i])
+            ax.set_xticks(plt_ticks[i])  
+            plt.xticks(rotation=45)# updated by benjamin.rose@me.com to always rotate labels.
             ax.set_yticks(plt_ticks[j])
 
             if i > 0:
