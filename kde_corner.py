@@ -98,7 +98,7 @@ def latex_1sigma_credible(vals, dataset_labels):
     percentiles = scoreatpercentile(vals, [15.8655, 50., 84.1345], axis = 1)
     
     smallest_unc = (percentiles[1:] - percentiles[:-1]).min()
-    decimal_places = int(np.around(1.80102999566 - np.log10(smallest_unc)))
+    decimal_places = int(np.around(0.80102999566 - np.log10(smallest_unc)))
 
     fmt_txt = "%." + str(decimal_places) + "f"
 
@@ -116,8 +116,8 @@ def latex_1sigma_credible(vals, dataset_labels):
 
 def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003],
-               colors = None, bw_method = 0.1, labelfontsize = None, ax_limits=[], truths=None,
-               titles=None):
+               colors = None, bw_method = 0.1, labelfontsize = None, dataset_labels = None,
+               show_contours = None, ax_limits=[], truths=None, titles=None):
     # type: (samples, labels, str, figsize, pad_side, pad_between, float, contours,
     #        colors, float, labelfontsize) -> Union[None, matplotlib.pyplot.figure]
     """
@@ -156,7 +156,7 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
     lablefontsize:
 
-        dataset_labels: Labels for each dataset
+    dataset_labels: Labels for each dataset
 
     titles:
         15.8655, 50, and 84.1345 percentiles, not gaurenteed to match the KDE CR.
@@ -186,14 +186,14 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
         alpha = 1
         
-        samples = [samples]   # This way we can loop over the set of samples.
+        samples = np.expand_dims(samples, axis=0)   # This way we can loop over the set of samples.
     else:
         # There is a collection of data sets here
         N_datasets = len(samples)       
 
         for i, samp in enumerate(samples):
             if len(samp) > len(samp[0]):
-                samples[i] = np.transpose(samp)
+                samples[i] = np.transpose(samp)   # this does not work well with np.arrays.
             else:
                 samples[i] = samp #TODO: fix
         
@@ -201,6 +201,9 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
         # alpha = 0.5
         alpha = 0.4
+
+    # have this after try-except-else block so transpose works.
+    samples = np.array(samples)
 
     if figsize == None:
         figsize = [4 + 1.5*n_var]*2
@@ -237,9 +240,6 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         #     colors = cm.ScalarMappable(cmap='Blues').to_rgba(grayscales, alpha=0.5) [
         # colors = [plt.get_cmap('Blues'), plt.get_cmap('Purples') ] # hard code for two samples
     truth_color = "#4682b4"
-    title_fmt = '.3g'    # have 3 significant digits, left align with "0" padding
-    uncert_fmt = '.3f'
-    fmt = lambda x: f"{{0:{x}}}".format
     #colors = colors[::-1]
 
     fig = plt.figure(figsize = figsize)
@@ -271,7 +271,6 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                 kernel_eval /= kernel_eval.sum()
                 kernel_sort = np.sort(kernel_eval)
                 kernel_cum = np.cumsum(kernel_sort)
-                mean = vals[np.where(kernel_eval==1)[0][0]]
 
                 levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
                 print("1D levels ", levels)
