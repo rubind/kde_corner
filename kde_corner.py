@@ -15,7 +15,12 @@ from itertools import cycle
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from scipy.stats import gaussian_kde
+from scipy.stats import gaussian_kde, scoreatpercentile
+try:
+    from tqdm import trange
+except:
+    trange = range
+    
 plt.rcParams["font.family"] = "serif"
 
 __all__ = ['kde_corner', 'run_2D_KDE']
@@ -87,10 +92,32 @@ def run_2D_KDE(samples_i, samples_j, bw_method = 0.1, contours = [0.317311, 0.04
 
     return kernel_eval, levels, xvals, yvals, lambda x: kernel(x)/norm_term
 
+def latex_1sigma_credible(vals, dataset_labels):
+    # vals is 2d: datasets by samples
+    
+    percentiles = scoreatpercentile(vals, [15.8655, 50., 84.1345], axis = 1)
+    
+    smallest_unc = (percentiles[1:] - percentiles[:-1]).min()
+    decimal_places = int(np.around(0.80102999566 - np.log10(smallest_unc)))
+
+    fmt_txt = "%." + str(decimal_places) + "f"
+
+    latex_txt = ""
+    for i in range(len(vals)):
+        if dataset_labels[i] != "":
+            the_label = dataset_labels[i] + ": "
+        else:
+            the_label = ""
+            
+        latex_txt += (the_label + "$" + fmt_txt + "^{+" + fmt_txt + "}_{-" + fmt_txt + "}$\n") % (percentiles[1,i], percentiles[2,i] - percentiles[1,i], percentiles[1,i] - percentiles[0,i])
+    #print(latex_txt)
+    return latex_txt[:-1] # Leave off last \n
+    
+
 def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                pad_between = None, label_coord = -0.25, contours = [0.317311, 0.0455003],
-               colors = None, bw_method = 0.1, labelfontsize = None, ax_limits=[], truths=None,
-               titles=None):
+               colors = None, bw_method = 0.1, labelfontsize = None, dataset_labels = None,
+               show_contours = None, ax_limits=[], truths=None, titles=None):
     # type: (samples, labels, str, figsize, pad_side, pad_between, float, contours,
     #        colors, float, labelfontsize) -> Union[None, matplotlib.pyplot.figure]
     """
@@ -129,6 +156,8 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
     lablefontsize:
 
+    dataset_labels: Labels for each dataset
+
     titles:
         15.8655, 50, and 84.1345 percentiles, not gaurenteed to match the KDE CR.
 
@@ -143,7 +172,7 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
     """
     try:
-        samples[0][0][0]
+        samples[0][0][0] # Datasets, parameters, samples
     except IndexError:
         # there is only 1 data set here
         N_datasets = 1
@@ -157,14 +186,14 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
         alpha = 1
         
-        samples = [samples]   # This way we can loop over the set of samples.
+        samples = np.expand_dims(samples, axis=0)   # This way we can loop over the set of samples.
     else:
         # There is a collection of data sets here
         N_datasets = len(samples)       
 
         for i, samp in enumerate(samples):
             if len(samp) > len(samp[0]):
-                samples[i] = np.transpose(samp)
+                samples[i] = np.transpose(samp)   # this does not work well with np.arrays.
             else:
                 samples[i] = samp #TODO: fix
         
@@ -172,6 +201,9 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
         # alpha = 0.5
         alpha = 0.4
+
+    # have this after try-except-else block so transpose works.
+    samples = np.array(samples)
 
     if figsize == None:
         figsize = [4 + 1.5*n_var]*2
@@ -185,6 +217,12 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
     if labelfontsize == None:
         labelfontsize = 6 + int(figsize[0])
     print("labelfontsize ", labelfontsize)
+
+    if dataset_labels == None:
+        dataset_labels = [""]*len(samples)
+
+    if show_contours == None:
+        show_contours = [1]*len(samples)
 
     if colors == None:
         # TODO: make this default back to greyscale for 1 dataset
@@ -202,9 +240,6 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         #     colors = cm.ScalarMappable(cmap='Blues').to_rgba(grayscales, alpha=0.5) [
         # colors = [plt.get_cmap('Blues'), plt.get_cmap('Purples') ] # hard code for two samples
     truth_color = "#4682b4"
-    title_fmt = '.3g'    # have 3 significant digits, left align with "0" padding
-    uncert_fmt = '.2g'
-    fmt = lambda x: f"{{0:{x}}}".format
     #colors = colors[::-1]
 
     fig = plt.figure(figsize = figsize)
@@ -218,44 +253,46 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
     for i in range(n_var):
         ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - i], plt_size, plt_size])
         #ax.hist(samples[i])
+        ax.set_title(latex_1sigma_credible(samples[:,i,:], dataset_labels))
 
-        for samp, color in zip(samples, colors):
-            pad_samples = reflect(samp[i])
-            try:
-                kernel = gaussian_kde(pad_samples, bw_method = bw_method)
-            except:
-                print("Couldn't run KDE!")
-                kernel = lambda x: x*0
+        
+        for samp, show_contour, color, dataset_label in zip(samples, show_contours, colors, dataset_labels):
+            if show_contour:
+                pad_samples = reflect(samp[i])
+                try:
+                    kernel = gaussian_kde(pad_samples, bw_method = bw_method)
+                except:
+                    print("Couldn't run KDE!")
+                    kernel = lambda x: x*0
 
-            vals = np.linspace(min(samp[i]), max(samp[i]), 1000)
+                vals = np.linspace(min(samp[i]), max(samp[i]), 1000)
 
-            kernel_eval = kernel(vals)
-            kernel_eval /= kernel_eval.max()
-            kernel_sort = np.sort(kernel_eval)
-            kernel_cum = np.cumsum(kernel_sort)
-            mean = vals[np.where(kernel_eval==1)[0][0]]
+                kernel_eval = kernel(vals)
+                kernel_eval /= kernel_eval.sum()
+                kernel_sort = np.sort(kernel_eval)
+                kernel_cum = np.cumsum(kernel_sort)
 
-            levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
-            print("1D levels ", levels)
+                levels = [kernel_sort[np.argmin(abs(kernel_cum - item))] for item in contours[::-1]] + [1.e20]
+                print("1D levels ", levels)
 
-            for j in range(len(contours)):
-                ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = color[j], alpha=alpha)
-            ax.plot(vals, kernel_eval, color = 'k')
-            ax.set_ylim(0, ax.get_ylim()[1])
 
-            q_16, q_50, q_84 = np.percentile(samp[i], (15.8655, 50, 84.1345))
-            q_m, q_p = q_50-q_16, q_84-q_50
-            title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
-            title = title.format(fmt(title_fmt)(q_50), fmt(uncert_fmt)(q_m), fmt(uncert_fmt)(q_p))
-            current_title = ax.get_title()
-            if current_title == '':
-                # ax.set_title(f'{mean:{fmt}}, {np.percentile(samp[i], (15.8655, 50, 84.1345))}')
-                ax.set_title(title)
-            else:
-                # ax.set_title(f'{mean:{fmt}}, {np.percentile(samp[i], (15.8655, 50, 84.1345))}\n' + current_title)
-                ax.set_title(title + '\n' + current_title)      # todo(This is a bad default behavior)
+                for j in range(len(contours)):
+                    if (i == 0) and (j == 0):
+                        the_label = dataset_label
+                    else:
+                        the_label = ""
+                    ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = color[j], alpha=alpha, label = the_label)
+                    if the_label != "":
+                        fig.legend(bbox_to_anchor=(1.0, 1.0))#loc = 'best')
+
+                if len(samples) == 1:
+                    plot_this_color = 'k'
+                else:
+                    plot_this_color = color
+                ax.plot(vals, kernel_eval, color = plot_this_color)
+        ax.set_ylim(0, ax.get_ylim()[1])
             
-            # TODO: update so this does not get redone each time. Pull out of loop and do use slicing?
+        # TODO: update so this does not get redone each time. Pull out of loop and do use slicing?
         ax.set_yticks([])
         if i < n_var - 1:
             ax.set_xticklabels([])
@@ -264,6 +301,16 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
             plt.xticks(rotation = 45)
             plt.yticks(rotation = 45)
 
+
+        cur_min = samples[:,i,:].min()
+        cur_max = samples[:,i,:].max()
+
+        print("cur_min, cur_max", cur_min, cur_max)
+        
+        if float((samples[:,i,:] < cur_min*0.98 + cur_max*0.02).sum())/samples[:,i,:].size > 0.004 or float((samples[:,i,:] > cur_max*0.98 + cur_min*0.02).sum())/samples[:,i,:].size > 0.004:
+            ax.set_xlim(cur_min, cur_max)
+            print("setting to cur_min, cur_max")
+            
         #TODO(This is the default operation, but overwriting plt_limits will change the plot limits. I think.)
         if not ax_limits == []:
             ax.set_xlim(ax_limits[i])
@@ -286,16 +333,21 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
             ax.axvline(truths[i], color=truth_color)
         
 
-    for i in range(n_var - 1):
+    for i in trange(n_var - 1):
         for j in range(i+1, n_var):
-            for samp, color in zip(samples, colors):
-                kernel_eval, levels, xvals, yvals, kfn = run_2D_KDE(samp[i], samp[j], bw_method = bw_method, contours = contours)
+            ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - j], plt_size, plt_size])
 
-                ax = fig.add_axes([plt_starts[i], plt_starts[n_var - 1 - j], plt_size, plt_size])
+            for samp, show_contour, color in zip(samples, show_contours, colors):
+                if show_contour:
+                    kernel_eval, levels, xvals, yvals, kfn = run_2D_KDE(samp[i], samp[j], bw_method = bw_method, contours = contours)
 
-                # TODO: only use alpha if multiple samples
-                ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = color, alpha=alpha)
-                ax.contour(xvals, yvals, kernel_eval, levels = levels, colors = 'k')
+                    
+                    # TODO: only use alpha if multiple samples
+                    ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = color, alpha=alpha)
+                    ax.contour(xvals, yvals, kernel_eval, levels = levels, colors = color)
+                    print("samp.shape", samp.shape)
+                else:
+                    plt.plot(np.median(samp[i]), np.median(samp[j]), 'o', color = color)
 
             if truths is not None:
                 if truths[j] is not None and truths[i] is not None:
