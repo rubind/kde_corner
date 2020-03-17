@@ -203,7 +203,7 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         # colors = [plt.get_cmap('Blues'), plt.get_cmap('Purples') ] # hard code for two samples
     truth_color = "#4682b4"
     title_fmt = '.3g'    # have 3 significant digits, left align with "0" padding
-    uncert_fmt = '.2g'
+    uncert_fmt = '.3f'
     fmt = lambda x: f"{{0:{x}}}".format
     #colors = colors[::-1]
 
