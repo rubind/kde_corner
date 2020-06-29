@@ -171,6 +171,9 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
     It is best to use multiple contours or multiple data sets, but not both.
 
     """
+    samples = np.array(samples)
+    print("samples.shape", samples.shape)
+    
     try:
         samples[0][0][0] # Datasets, parameters, samples
     except IndexError:
@@ -241,6 +244,7 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
         # colors = [plt.get_cmap('Blues'), plt.get_cmap('Purples') ] # hard code for two samples
     truth_color = "#4682b4"
     #colors = colors[::-1]
+    print("colors", colors)
 
     fig = plt.figure(figsize = figsize)
 
@@ -281,6 +285,7 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                         the_label = dataset_label
                     else:
                         the_label = ""
+
                     ax.fill_between(vals, 0, (kernel_eval > levels[j])*(kernel_eval < levels[j+1])*kernel_eval, color = color[j], alpha=alpha, label = the_label)
                     if the_label != "":
                         fig.legend(bbox_to_anchor=(1.0, 1.0))#loc = 'best')
@@ -289,6 +294,12 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
                     plot_this_color = 'k'
                 else:
                     plot_this_color = color
+                    try:
+                        plot_this_color[0][0]
+                        plot_this_color = plot_this_color[0]
+                    except:
+                        pass
+                print("plot_this_color", plot_this_color)
                 ax.plot(vals, kernel_eval, color = plot_this_color)
         ax.set_ylim(0, ax.get_ylim()[1])
             
@@ -343,7 +354,9 @@ def kde_corner(samples, labels, pltname = None, figsize = None, pad_side = None,
 
                     
                     # TODO: only use alpha if multiple samples
-                    ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = color, alpha=alpha)
+                    
+                    print("levels", levels + [1])
+                    ax.contourf(xvals, yvals, kernel_eval, levels = levels + [1], colors = color + [(1,1,1)], alpha=alpha)
                     ax.contour(xvals, yvals, kernel_eval, levels = levels, colors = color)
                     print("samp.shape", samp.shape)
                 else:
